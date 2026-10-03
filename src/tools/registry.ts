@@ -53,7 +53,7 @@ export const toolRegistry: Record<string, ToolDefinition> = {
   getLatestAssessment: {
     fn: (input) => getLatestAssessment(input as { userId?: string }),
     description:
-      "Returns assessment link, graft range, and share status",
+      "Returns the assessment page link (graft range, recommended clinics, booking) and share status",
     kind: "immediate",
   },
   getPatientContext: {
