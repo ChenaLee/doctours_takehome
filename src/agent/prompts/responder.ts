@@ -1,13 +1,43 @@
 import type { AgentState } from "../../types.js";
 import { coreSkill } from "../../skills/core.js";
 import { getSkillPrompt } from "../../skills/registry.js";
+import { getToolsByKind } from "../../tools/registry.js";
 import {
   PATIENT_SUMMARY,
   CLINIC_FLAGS,
   COLLECTION_STATUS,
   WORKING_MEMORY,
   COORDINATOR_DISPLAY_NAME,
+  CHAT_KIND,
+  CHAT_LIST,
+  RECENT_CALLS,
+  SAVED_CLINIC_COUNT,
+  PATIENT_IMAGE_COUNT,
+  SENDER_DISPLAY_NAME,
+  SENDER_PARTICIPANT_ROLE,
 } from "../../constants.js";
+
+const BASE_PROMPT_VALUES: Record<string, string | number> = {
+  PATIENT_SUMMARY,
+  CLINIC_FLAGS,
+  COLLECTION_STATUS,
+  WORKING_MEMORY,
+  COORDINATOR_DISPLAY_NAME,
+  CHAT_KIND,
+  CHAT_LIST,
+  RECENT_CALLS,
+  SAVED_CLINIC_COUNT,
+  PATIENT_IMAGE_COUNT,
+  SENDER_DISPLAY_NAME,
+  SENDER_PARTICIPANT_ROLE,
+};
+
+/** Fills {{KEY}} placeholders; unknown ones (e.g. {{clinic.slug}}) are prompt instructions and stay as-is. */
+export function renderBasePrompt(): string {
+  return coreSkill.replace(/\{\{(\w+)\}\}/g, (match, key: string) =>
+    key in BASE_PROMPT_VALUES ? String(BASE_PROMPT_VALUES[key]) : match,
+  );
+}
 
 export function buildResponderPrompt(
   state: AgentState,
@@ -15,9 +45,10 @@ export function buildResponderPrompt(
 ): string {
   const sections: string[] = [];
 
-  sections.push(coreSkill);
+  sections.push(renderBasePrompt());
 
-  for (const skill of skills) {
+  for (const skill of new Set(skills)) {
+    if (skill === "core") continue; // already included as the base prompt
     const prompt = getSkillPrompt(skill);
     if (prompt) sections.push(prompt);
   }
@@ -28,21 +59,6 @@ export function buildResponderPrompt(
     );
     sections.push(`# TOOL RESULTS\n${resultLines.join("\n\n")}`);
   }
-
-  sections.push(`# PATIENT CONTEXT
-${PATIENT_SUMMARY}
-
-# Clinic flags
-${CLINIC_FLAGS}
-
-# Collection Status
-${COLLECTION_STATUS}
-
-# Working Memory
-${WORKING_MEMORY}
-
-# Coordinator
-You are responding as ${COORDINATOR_DISPLAY_NAME}.`);
 
   sections.push(`# OUTPUT FORMAT
 Return ONLY valid JSON (no markdown fences):
@@ -60,7 +76,7 @@ Return ONLY valid JSON (no markdown fences):
     "workingMemoryUpdates": { ... } or null
   },
   "actions": [
-    {"tool": "updateWorkingMemory", "args": {"memory": {...}}}
+    {"tool": "toolName", "args": {...}}
   ]
 }
 
@@ -70,7 +86,7 @@ Rules:
 - escalate is false for normal replies. If true, escalationReason must be non-null.
 - If escalate is false, escalationReason must be null.
 - attachmentUrls: only URLs from tool results, at most 3. null if none.
-- actions: deferred write tool calls (updateWorkingMemory, updateUserClinicPreferences).`);
+- actions: deferred tool calls, only from: ${getToolsByKind("deferred").map((t) => t.name).join(", ")}.`);
 
   return sections.join("\n\n");
 }

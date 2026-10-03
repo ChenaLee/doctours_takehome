@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { coreSkill } from "../src/skills/core.js";
 import { pricingSkill } from "../src/skills/pricing.js";
 import { clinicInfoSkill } from "../src/skills/clinic-info.js";
@@ -10,7 +12,9 @@ import {
   skillRegistry,
   getSkillPrompt,
   getSkillDescriptions,
+  getSkillTools,
 } from "../src/skills/registry.js";
+import { toolRegistry } from "../src/tools/registry.js";
 
 const allSkills = {
   core: coreSkill,
@@ -36,12 +40,7 @@ describe("skill prompts are non-empty", () => {
 // ---------- Line count limits ----------
 
 describe("skill line counts", () => {
-  it("core is under 60 lines", () => {
-    const lines = coreSkill.split("\n").length;
-    expect(lines).toBeLessThan(60);
-  });
-
-  for (const [name, prompt] of Object.entries(allSkills)) {
+  for (const [name, prompt] of Object.entries(allSkills).filter(([n]) => n !== "core")) {
     it(`${name} is under 250 lines`, () => {
       const lines = prompt.split("\n").length;
       expect(lines).toBeLessThan(250);
@@ -78,8 +77,8 @@ describe("pricing skill content", () => {
 });
 
 describe("consultation skill content", () => {
-  it("contains free phone call", () => {
-    expect(consultationSkill.toLowerCase()).toContain("free phone call");
+  it("states the consultation is a phone call", () => {
+    expect(consultationSkill).toContain("The consultation is a phone call");
   });
 
   it("contains consultation URL", () => {
@@ -99,7 +98,7 @@ describe("consultation skill content", () => {
 
 describe("assessment skill content", () => {
   it("contains turnaround promises prohibition", () => {
-    expect(assessmentSkill).toContain("TURNAROUND");
+    expect(assessmentSkill).toContain("No assessment turnaround promises (HARD)");
   });
 
   it("contains revision handling", () => {
@@ -192,7 +191,7 @@ describe("core skill content", () => {
   });
 
   it("contains link placement", () => {
-    expect(coreSkill).toContain("LINK PLACEMENT");
+    expect(coreSkill).toContain("Link placement (applies to EVERY URL)");
   });
 
   it("does NOT contain package pricing details", () => {
@@ -224,7 +223,7 @@ describe("no cross-skill duplication", () => {
       expect(
         prompt,
         `${name} should not have COLLECTION PERSISTENCE`,
-      ).not.toContain("COLLECTION PERSISTENCE");
+      ).not.toContain("# COLLECTION PERSISTENCE");
     }
   });
 
@@ -236,7 +235,7 @@ describe("no cross-skill duplication", () => {
       expect(
         prompt,
         `${name} should not have CLINIC STATUS TIERS`,
-      ).not.toContain("CLINIC STATUS TIERS");
+      ).not.toContain("# CLINIC STATUS TIERS");
     }
   });
 });
@@ -297,5 +296,63 @@ describe("getSkillDescriptions", () => {
     const pricing = descriptions.find((d) => d.name === "pricing");
     expect(pricing).toBeDefined();
     expect(pricing!.description).toContain("Package facts");
+  });
+});
+
+// ---------- Verbatim split of the original system prompt ----------
+
+describe("original system prompt split", () => {
+  const original = readFileSync(
+    fileURLToPath(new URL("../prompts/original-system-prompt.md", import.meta.url)),
+    "utf-8",
+  );
+  // Excerpt headers are added by the split; promoted "### X" headings become "# X".
+  const lines = (text: string) =>
+    text
+      .split("\n")
+      .filter((l) => l.trim() && !l.endsWith("(excerpt)"))
+      .map((l) => l.replace(/^#+ /, "# "))
+      .sort();
+
+  it("core + skills contain every original line exactly once", () => {
+    const combined = Object.values(allSkills).join("\n");
+    expect(lines(combined)).toEqual(lines(original));
+  });
+
+  it("core keeps the non-skill sections", () => {
+    for (const heading of [
+      "# CAPABILITIES & CONSTRAINTS",
+      "# BUSINESS POLICY GROUNDING (HARD RULE)",
+      "# STAGE-SPECIFIC BEHAVIOR",
+      "# TOOL USAGE",
+      "# OPERATIONAL KNOWLEDGE",
+      "# ACTIVE PROMO OFFER (HARD RULE)",
+    ]) {
+      expect(coreSkill).toContain(heading);
+    }
+    expect(coreSkill).toContain("The assessment is also where they can pay (CRITICAL)");
+  });
+});
+
+// ---------- Skill → tool dependencies ----------
+
+describe("getSkillTools", () => {
+  it("derives tool dependencies from skill prompt text", () => {
+    expect(getSkillTools("assessment")).toContain("getLatestAssessment");
+    expect(getSkillTools("payment")).toContain("getPaymentLink");
+    expect(getSkillTools("pricing")).toContain("getClinicPackages");
+    expect(getSkillTools("consultation")).toContain("getConsultationRescheduleLink");
+  });
+
+  it("only returns registered tools", () => {
+    for (const { name } of getSkillDescriptions()) {
+      for (const tool of getSkillTools(name)) {
+        expect(toolRegistry[tool]).toBeDefined();
+      }
+    }
+  });
+
+  it("returns [] for unknown skills", () => {
+    expect(getSkillTools("nonexistent")).toEqual([]);
   });
 });

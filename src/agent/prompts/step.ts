@@ -1,6 +1,6 @@
 import type { AgentState, AgentAction } from "../../types.js";
-import { toolRegistry } from "../../tools/registry.js";
-import { getSkillDescriptions } from "../../skills/registry.js";
+import { getToolsByKind } from "../../tools/registry.js";
+import { getSkillDescriptions, getSkillPrompt } from "../../skills/registry.js";
 
 export interface StepDecision {
   reasoning: string;
@@ -40,6 +40,23 @@ ${state.conversationHistory || "(none)"}`);
     sections.push(`# END GOALS\nNone yet — this is iteration 1. Decompose the patient message into end goals.`);
   }
 
+  const activeSkills = [
+    ...new Set([
+      ...state.endGoals.map((g) => g.requiredSkill).filter((s): s is string => s !== null),
+      ...state.loadedSkills,
+    ]),
+  ];
+  const skillRules = activeSkills
+    .map((name) => ({ name, prompt: getSkillPrompt(name) }))
+    .filter((s): s is { name: string; prompt: string } => s.prompt !== null);
+  if (skillRules.length > 0) {
+    sections.push(
+      `# SKILL RULES (from skills your goals require — follow these when choosing tools and arguments)\n${skillRules
+        .map((s) => `## skill: ${s.name}\n${s.prompt}`)
+        .join("\n\n")}`,
+    );
+  }
+
   if (Object.keys(state.toolResults).length > 0) {
     const resultLines = Object.entries(state.toolResults).map(
       ([tool, result]) => `## ${tool}\n${JSON.stringify(result, null, 2)}`,
@@ -55,24 +72,28 @@ ${state.conversationHistory || "(none)"}`);
     sections.push(`# ACTIONS TAKEN\n${historyLines.join("\n")}`);
   }
 
-  const toolLines = Object.entries(toolRegistry).map(
-    ([name, def]) => `- ${name}: ${def.description}`,
-  );
-  sections.push(`# AVAILABLE TOOLS\n${toolLines.join("\n")}`);
+  const immediateTools = getToolsByKind("immediate");
+  const deferredTools = getToolsByKind("deferred");
+  const skills = getSkillDescriptions();
+  const formatEntries = (entries: Array<{ name: string; description: string }>) =>
+    entries.map((e) => `- ${e.name}: ${e.description}`).join("\n");
 
-  const skillLines = getSkillDescriptions().map(
-    (s) => `- ${s.name}: ${s.description}`,
+  sections.push(`# AVAILABLE TOOLS (call with call_tool; result is available next iteration)\n${formatEntries(immediateTools)}`);
+  sections.push(`# DEFERRED TOOLS (queue in writeActions; run after the reply is sent)\n${formatEntries(deferredTools)}`);
+  const skillLines = skills.map(
+    (s) => `- ${s.name}: ${s.description}${s.tools.length > 0 ? ` (relies on: ${s.tools.join(", ")})` : ""}`,
   );
   sections.push(`# AVAILABLE SKILLS (domain knowledge loaded for response composition)\n${skillLines.join("\n")}`);
 
   sections.push(`# CRITICAL — CAPABILITY BOUNDARY (check BEFORE choosing any other action)
-Your tools can ONLY: look up data, provide links, and update internal memory/preferences.
-Your tools CANNOT: charge cards, process payments, move money, make phone calls, book procedures, send emails, or take ANY real-world action on the patient's behalf.
+The tools and skills listed above are your COMPLETE set of capabilities. Nothing else exists.
+Each tool does exactly what its description says — no more. Each skill is knowledge only; a skill never performs an action.
 
-- If the patient asks you to DO something that none of your tools can accomplish → escalate with "cant_handle". Do NOT attempt a partial answer.
+- If the patient asks you to DO something, find a tool whose description performs that exact action. If none does → escalate with "cant_handle". Do NOT attempt a partial answer.
+- Do NOT substitute a related tool for the requested action. A tool that returns a link or information for the patient to act on is not the same as performing the action for them.
 - If the patient shares sensitive data (card numbers, SSN, credentials) → escalate with "cant_handle". NEVER echo sensitive data.
 - If the patient demands a human, person, or agent → escalate with "human_request".
-- If the request falls outside ALL of your available skills' domain knowledge → escalate with "cant_handle".
+- If answering requires knowledge outside ALL of the listed skills' domains → escalate with "cant_handle".
 
 When in doubt, escalate. A wrong escalation is recoverable; a wrong answer is not.
 
@@ -88,7 +109,7 @@ Decide the next action. Return ONLY valid JSON (no markdown fences):
 }
 
 Action types:
-- {"type": "call_tool", "tool": "toolName", "args": {...}} — call a read tool to gather data
+- {"type": "call_tool", "tool": "toolName", "args": {...}} — call an available tool to gather data
 - {"type": "load_skill", "skill": "skillName"} — load domain knowledge for response composition
 - {"type": "escalate", "reason": "short reason", "category": "human_request" or "cant_handle"} — hand to human
 - {"type": "clarify", "question": "what to ask", "missingInfo": "what's missing"} — ask the patient
@@ -98,12 +119,12 @@ Action types:
 - On iteration 1, populate goalsUpdate with your initial end goal decomposition from the message.
 - If a goal can be resolved from data already gathered or from patient context, mark it resolved — no tool call needed.
 - If a goal needs tool data, call_tool with the specific tool and arguments.
+- The responder can only use data gathered here. When a goal needs a skill, call the AVAILABLE TOOLS that skill relies on whose data the goal needs (links, IDs, statuses) before responding.
+- The responder can never write a URL itself. If the answer will point the patient to a page or resource that an AVAILABLE TOOL returns a link for, call that tool before responding so the exact URL can be included.
 - Call only ONE tool per iteration. Assess the result before choosing the next.
-- If the patient asks for something outside system capability (charging a card, moving money), escalate with category "cant_handle".
-- If the patient demands a human, escalate with category "human_request".
 - If ALL goals are resolved, respond with the list of skills the response needs.
 - A tool result may reveal that further tool calls are needed. Add new goals if so.
-- writeActions are deferred — they execute AFTER the response (e.g., updateWorkingMemory, updateUserClinicPreferences).
+- call_tool may only use AVAILABLE TOOLS. writeActions may only use DEFERRED TOOLS; they execute AFTER the response.
 - Current iteration: ${iteration}`);
 
   return sections.join("\n\n");

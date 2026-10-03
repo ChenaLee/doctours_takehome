@@ -3,6 +3,8 @@ import {
   buildStepPrompt,
   parseStepResponse,
 } from "../src/agent/prompts/step.js";
+import { toolRegistry, getToolsByKind } from "../src/tools/registry.js";
+import { skillRegistry } from "../src/skills/registry.js";
 import {
   createAgentState,
   addGoal,
@@ -115,6 +117,62 @@ describe("buildStepPrompt", () => {
     expect(prompt).toContain("pricing");
     expect(prompt).toContain("consultation");
     expect(prompt).toContain("assessment");
+  });
+
+  it("splits tools into available and deferred sections from the registry", () => {
+    const state = createAgentState("Hi", DUMMY_CONTEXT, DUMMY_HISTORY);
+    const prompt = buildStepPrompt(state, 1);
+    const deferredIdx = prompt.indexOf("# DEFERRED TOOLS");
+    const skillsIdx = prompt.indexOf("# AVAILABLE SKILLS");
+    const deferredSection = prompt.slice(deferredIdx, skillsIdx);
+    for (const { name } of getToolsByKind("deferred")) {
+      expect(deferredSection).toContain(`- ${name}:`);
+    }
+    for (const { name } of getToolsByKind("immediate")) {
+      expect(deferredSection).not.toContain(`- ${name}:`);
+    }
+  });
+
+  it("picks up newly registered tools and skills without prompt changes", () => {
+    toolRegistry.chargeCard = {
+      fn: () => ({ charged: true }),
+      description: "Charges the patient's card on file",
+      kind: "immediate",
+    };
+    skillRegistry.visas = { prompt: "visa rules", description: "Travel visa requirements" };
+    try {
+      const prompt = buildStepPrompt(createAgentState("Hi", DUMMY_CONTEXT, DUMMY_HISTORY), 1);
+      expect(prompt).toContain("- chargeCard: Charges the patient's card on file");
+      expect(prompt).toContain("- visas: Travel visa requirements");
+    } finally {
+      delete toolRegistry.chargeCard;
+      delete skillRegistry.visas;
+    }
+  });
+
+  it("injects rules for skills required by goals", () => {
+    const state = createAgentState("Hi", DUMMY_CONTEXT, DUMMY_HISTORY);
+    expect(buildStepPrompt(state, 1)).not.toContain("# SKILL RULES");
+    addGoal(state, { id: "g1", description: "pay", resolved: false, requiredSkill: "payment" });
+    const prompt = buildStepPrompt(state, 2);
+    expect(prompt).toContain("# SKILL RULES");
+    expect(prompt).toContain("## skill: payment");
+    expect(prompt).toContain("CHECKOUT link");
+  });
+
+  it("annotates skills with the tools they rely on", () => {
+    const prompt = buildStepPrompt(createAgentState("Hi", DUMMY_CONTEXT, DUMMY_HISTORY), 1);
+    expect(prompt).toMatch(/- assessment: .*\(relies on: [^)]*getLatestAssessment/);
+  });
+
+  it("capability boundary does not hard-code specific forbidden actions", () => {
+    const prompt = buildStepPrompt(createAgentState("Hi", DUMMY_CONTEXT, DUMMY_HISTORY), 1);
+    const boundary = prompt.slice(
+      prompt.indexOf("# CRITICAL — CAPABILITY BOUNDARY"),
+      prompt.indexOf("# TASK"),
+    );
+    expect(boundary).toContain("COMPLETE set of capabilities");
+    expect(boundary).not.toMatch(/charg(e|ing) (a )?card|move money|moving money/i);
   });
 
   it("includes response format instructions", () => {

@@ -5,6 +5,7 @@ import { consultationSkill } from "./consultation.js";
 import { assessmentSkill } from "./assessment.js";
 import { paymentSkill } from "./payment.js";
 import { collectionSkill } from "./collection.js";
+import { toolRegistry } from "../tools/registry.js";
 
 export interface SkillDefinition {
   prompt: string;
@@ -14,31 +15,31 @@ export interface SkillDefinition {
 export const skillRegistry: Record<string, SkillDefinition> = {
   core: {
     prompt: coreSkill,
-    description: "Identity, voice, response format, conversation awareness",
+    description: "Base system prompt: identity, voice, constraints, stages, tool usage (always loaded)",
   },
   pricing: {
     prompt: pricingSkill,
-    description: "Package facts, financing geography, health insurance, what matters vs nice to have",
+    description: "Package facts, financing geography, insurance, CareCredit, what matters vs nice to have",
   },
   "clinic-info": {
     prompt: clinicInfoSkill,
-    description: "Clinic status tiers, clinic website rules, clinic selection guidance",
+    description: "Clinic status tiers, clinic website, creator partnerships, travel readiness",
   },
   consultation: {
     prompt: consultationSkill,
-    description: "Consultation format, scheduling, rescheduling, booking confirmation",
+    description: "Consultation format, rescheduling, booking confirmation, phone contact",
   },
   assessment: {
     prompt: assessmentSkill,
-    description: "Assessment context, no turnaround promises, revisions",
+    description: "Assessment contents, revisions, no turnaround promises",
   },
   payment: {
     prompt: paymentSkill,
-    description: "Deposit rules, payment links, reversibility, time-bound pause",
+    description: "Deposits, payment vs checkout links, deposit eligibility, reversibility, time-bound pause",
   },
   collection: {
     prompt: collectionSkill,
-    description: "Info collection, image guidance, concern reflection",
+    description: "Area/name/photo collection, image guidance and delays, concern reflection",
   },
 };
 
@@ -46,9 +47,19 @@ export function getSkillPrompt(name: string): string | null {
   return skillRegistry[name]?.prompt ?? null;
 }
 
-export function getSkillDescriptions(): Array<{ name: string; description: string }> {
+/** Registered tools a skill's rules reference (e.g. "getPaymentLinkTool"), derived from its prompt text. */
+export function getSkillTools(name: string): string[] {
+  const prompt = getSkillPrompt(name);
+  if (!prompt) return [];
+  return Object.keys(toolRegistry).filter((tool) =>
+    new RegExp(`\\b${tool}(Tool)?\\b`).test(prompt),
+  );
+}
+
+export function getSkillDescriptions(): Array<{ name: string; description: string; tools: string[] }> {
   return Object.entries(skillRegistry).map(([name, def]) => ({
     name,
     description: def.description,
+    tools: getSkillTools(name),
   }));
 }

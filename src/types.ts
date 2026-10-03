@@ -83,7 +83,11 @@ export type AgentAction =
   | { type: "clarify"; question: string; missingInfo: string }
   | { type: "respond"; skills: string[] };
 
+export type ToolKind = "immediate" | "deferred";
+
 export interface ToolDefinition {
   fn: (input: Record<string, unknown>) => unknown;
   description: string;
+  /** immediate: called during planning via call_tool. deferred: queued via writeActions, run after the reply. */
+  kind: ToolKind;
 }

@@ -5,7 +5,7 @@ import { handleEscalation } from "./agent/escalation.js";
 import { buildResponderPrompt } from "./agent/prompts/responder.js";
 import { buildUserMessage } from "./engine/user-message.js";
 import { parseReplyResponse } from "./engine/response-parser.js";
-import { callTool } from "./tools/registry.js";
+import { callTool, toolRegistry } from "./tools/registry.js";
 import {
   PATIENT_SUMMARY,
   CLINIC_FLAGS,
@@ -80,6 +80,7 @@ export function executeWriteActions(
   actions: Array<{ tool: string; args: Record<string, unknown> }>,
 ): void {
   for (const action of actions) {
+    if (toolRegistry[action.tool]?.kind !== "deferred") continue;
     try {
       callTool(action.tool, action.args);
     } catch {
