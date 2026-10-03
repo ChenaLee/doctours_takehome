@@ -21,7 +21,7 @@ import {
   GOLD_PACKAGE_ID,
   SAPPHIRE_PACKAGE_ID,
 } from "../src/tools/index.js";
-import { toolRegistry, callTool } from "../src/tools/registry.js";
+import { toolRegistry, callTool, getToolsByKind } from "../src/tools/registry.js";
 
 // ---------- findClinic ----------
 
@@ -616,6 +616,20 @@ describe("toolRegistry", () => {
       expect(toolRegistry[name].description.length).toBeLessThan(100);
     });
   }
+
+  it("every tool declares a kind", () => {
+    for (const def of Object.values(toolRegistry)) {
+      expect(["immediate", "deferred"]).toContain(def.kind);
+    }
+  });
+
+  it("getToolsByKind partitions the registry", () => {
+    const immediate = getToolsByKind("immediate").map((t) => t.name);
+    const deferred = getToolsByKind("deferred").map((t) => t.name);
+    expect(immediate.length + deferred.length).toBe(Object.keys(toolRegistry).length);
+    expect(immediate).toContain("getPaymentLink");
+    expect(deferred).toContain("updateWorkingMemory");
+  });
 
   it("callTool dispatches to the right function", () => {
     const result = callTool("getAllClinics", {}) as { clinics: unknown[] };

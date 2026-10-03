@@ -560,3 +560,30 @@ describe("runAgentLoop", () => {
     }
   });
 });
+
+describe("runAgentLoop tool kind enforcement", () => {
+  it("refuses call_tool on a deferred tool and drops non-deferred writeActions", async () => {
+    const llm = mockLlm([
+      JSON.stringify({
+        reasoning: "Try a deferred tool immediately",
+        goalsUpdate: [{ id: "g1", description: "x", resolved: false, requiredSkill: null }],
+        action: { type: "call_tool", tool: "updateWorkingMemory", args: { memory: { a: 1 } } },
+        writeActions: [{ tool: "getPaymentLink", args: {} }],
+      }),
+      JSON.stringify({
+        reasoning: "done",
+        goalsUpdate: [{ id: "g1", description: "x", resolved: true, requiredSkill: null }],
+        action: { type: "respond", skills: [] },
+        writeActions: [],
+      }),
+    ]);
+
+    const state = await runAgentLoop("hi", DUMMY_CONTEXT, DUMMY_HISTORY, llm);
+
+    expect(state.toolResults).not.toHaveProperty("updateWorkingMemory");
+    expect(state.actionsHistory[0].result).toEqual({
+      error: "updateWorkingMemory is not an available tool",
+    });
+    expect(state.writeActions).toHaveLength(0);
+  });
+});

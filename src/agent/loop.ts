@@ -12,7 +12,7 @@ import {
 import { shouldTerminate, createFallbackAction } from "./safety.js";
 import { buildStepPrompt, parseStepResponse } from "./prompts/step.js";
 import type { StepDecision } from "./prompts/step.js";
-import { callTool } from "../tools/registry.js";
+import { callTool, toolRegistry } from "../tools/registry.js";
 import { getSkillPrompt } from "../skills/registry.js";
 
 export async function runAgentLoop(
@@ -70,6 +70,7 @@ function applyWriteActions(
   decision: StepDecision,
 ): void {
   for (const wa of decision.writeActions) {
+    if (toolRegistry[wa.tool]?.kind !== "deferred") continue;
     addWriteAction(state, wa.tool, wa.args);
   }
 }
@@ -82,6 +83,9 @@ function executeAction(
 
   switch (action.type) {
     case "call_tool": {
+      if (toolRegistry[action.tool]?.kind !== "immediate") {
+        return { error: `${action.tool} is not an available tool` };
+      }
       const result = callTool(action.tool, action.args);
       addToolResult(state, action.tool, result);
       return result;

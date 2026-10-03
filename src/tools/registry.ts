@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "../types.js";
+import type { ToolDefinition, ToolKind } from "../types.js";
 import {
   getAllClinics,
   getClinicDoctors,
@@ -21,44 +21,52 @@ export const toolRegistry: Record<string, ToolDefinition> = {
     fn: () => getAllClinics(),
     description:
       "Returns all partner clinics with IDs, names, addresses, flags, and specialties",
+    kind: "immediate",
   },
   getClinicDoctors: {
     fn: (input) =>
       getClinicDoctors(input as { clinicId?: string; clinicName?: string }),
     description:
       "Returns doctors for a clinic (accepts clinicId or clinicName)",
+    kind: "immediate",
   },
   getClinicPackages: {
     fn: (input) =>
       getClinicPackages(input as { clinicId?: string; clinicName?: string }),
     description:
       "Returns packages with names, prices, deposits, and addons for a clinic",
+    kind: "immediate",
   },
   getConsultationRescheduleLink: {
     fn: (input) =>
       getConsultationRescheduleLink(input as { userId?: string }),
     description: "Returns a consultation reschedule link (or no_consultation)",
+    kind: "immediate",
   },
   getFullCalls: {
     fn: (input) =>
       getFullCalls(input as { chatId?: string; limit?: number }),
     description:
       "Returns full call logs with summaries and transcripts",
+    kind: "immediate",
   },
   getLatestAssessment: {
     fn: (input) => getLatestAssessment(input as { userId?: string }),
     description:
-      "Returns assessment link, graft range, and share status",
+      "Returns the assessment page link (graft range, recommended clinics, booking) and share status",
+    kind: "immediate",
   },
   getPatientContext: {
     fn: (input) => getPatientContext(input as { userId?: string }),
     description:
       "Returns patient profile, pipeline status, and clinic/package preferences",
+    kind: "immediate",
   },
   getPatientImages: {
     fn: (input) => getPatientImages(input as { userId?: string }),
     description:
       "Returns which intake photo angles have been uploaded",
+    kind: "immediate",
   },
   getPaymentLink: {
     fn: (input) =>
@@ -67,15 +75,18 @@ export const toolRegistry: Record<string, ToolDefinition> = {
       ),
     description:
       "Returns a deposit payment or checkout URL (type: payment or checkout)",
+    kind: "immediate",
   },
   getSavedClinics: {
     fn: (input) => getSavedClinics(input as { userId?: string }),
     description:
       "Returns the patient's recommended/saved clinics with rankings",
+    kind: "immediate",
   },
   issuePromoCode: {
     fn: (input) => issuePromoCode(input as { userId?: string }),
     description: "Attempts to issue a promo code for the patient",
+    kind: "immediate",
   },
   updateUser: {
     fn: (input) =>
@@ -83,6 +94,7 @@ export const toolRegistry: Record<string, ToolDefinition> = {
         input as { firstName?: string; lastName?: string; userId?: string },
       ),
     description: "Updates patient name (only if not already set)",
+    kind: "deferred",
   },
   updateUserClinicPreferences: {
     fn: (input) =>
@@ -91,11 +103,13 @@ export const toolRegistry: Record<string, ToolDefinition> = {
       ),
     description:
       "Saves clinic/package selection and tentative procedure dates",
+    kind: "deferred",
   },
   updateWorkingMemory: {
     fn: (input) =>
       updateWorkingMemory(input as { memory?: Record<string, unknown> }),
     description: "Persists working memory updates for conversation continuity",
+    kind: "deferred",
   },
 };
 
@@ -108,4 +122,12 @@ export function callTool(
     throw new Error(`Unknown tool: ${name}`);
   }
   return tool.fn(args);
+}
+
+export function getToolsByKind(
+  kind: ToolKind,
+): Array<{ name: string; description: string }> {
+  return Object.entries(toolRegistry)
+    .filter(([, def]) => def.kind === kind)
+    .map(([name, def]) => ({ name, description: def.description }));
 }
