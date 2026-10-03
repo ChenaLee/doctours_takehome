@@ -65,7 +65,18 @@ ${state.conversationHistory || "(none)"}`);
   );
   sections.push(`# AVAILABLE SKILLS (domain knowledge loaded for response composition)\n${skillLines.join("\n")}`);
 
-  sections.push(`# TASK
+  sections.push(`# CRITICAL — CAPABILITY BOUNDARY (check BEFORE choosing any other action)
+Your tools can ONLY: look up data, provide links, and update internal memory/preferences.
+Your tools CANNOT: charge cards, process payments, move money, make phone calls, book procedures, send emails, or take ANY real-world action on the patient's behalf.
+
+- If the patient asks you to DO something that none of your tools can accomplish → escalate with "cant_handle". Do NOT attempt a partial answer.
+- If the patient shares sensitive data (card numbers, SSN, credentials) → escalate with "cant_handle". NEVER echo sensitive data.
+- If the patient demands a human, person, or agent → escalate with "human_request".
+- If the request falls outside ALL of your available skills' domain knowledge → escalate with "cant_handle".
+
+When in doubt, escalate. A wrong escalation is recoverable; a wrong answer is not.
+
+# TASK
 Decide the next action. Return ONLY valid JSON (no markdown fences):
 {
   "reasoning": "why this action is needed",
