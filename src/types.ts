@@ -79,7 +79,13 @@ export interface AgentState {
 export type AgentAction =
   | { type: "call_tool"; tool: string; args: Record<string, unknown> }
   | { type: "load_skill"; skill: string }
-  | { type: "escalate"; reason: string; category?: "human_request" | "cant_handle" }
+  | {
+      type: "escalate";
+      reason: string;
+      category?: "human_request" | "cant_handle";
+      /** Generic verb phrase for the action that can't be done, e.g. "send an email". */
+      cantDo?: string | null;
+    }
   | { type: "clarify"; question: string; missingInfo: string }
   | { type: "respond"; skills: string[] };
 

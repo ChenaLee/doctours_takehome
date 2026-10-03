@@ -166,3 +166,32 @@ describe("handleEscalation — defaults", () => {
     }
   });
 });
+
+describe("handleEscalation — cant_handle with cantDo", () => {
+  it("names the action the planner could not do", () => {
+    const reply = handleEscalation("cant_handle", "Asked to cancel a booking", "cancel a booking");
+    expect(reply.response).toBe("I can't cancel a booking. I'm getting a person for you.");
+    assertEscalationShape(reply);
+    assertShortResponse(reply);
+    assertNoUrls(reply);
+  });
+
+  it("normalizes a leading \"I can't\" and trailing period", () => {
+    const reply = handleEscalation("cant_handle", "r", "I can't Send an email.");
+    expect(reply.response).toBe("I can't send an email. I'm getting a person for you.");
+  });
+
+  it("falls back to the template when the phrase could echo sensitive data", () => {
+    for (const phrase of ["charge card 4242", "email bob@example.com", "open www.example.com", "x".repeat(60), "do <this>"]) {
+      expect(handleEscalation("cant_handle", "r", phrase).response).toBe(
+        "I can't help with that directly. I'm getting a person for you.",
+      );
+    }
+  });
+
+  it("ignores cantDo for human_request", () => {
+    expect(handleEscalation("human_request", "r", "cancel a booking").response).toBe(
+      "I'm getting a person for you.",
+    );
+  });
+});

@@ -373,6 +373,16 @@ describe("parseStepResponse", () => {
     expect(() => parseStepResponse(raw)).toThrow("Unknown action type");
   });
 
+  it("parses cantDo on a cant_handle escalation", () => {
+    const decision = parseStepResponse(JSON.stringify({
+      reasoning: "no tool sends email",
+      action: { type: "escalate", reason: "r", category: "cant_handle", cantDo: "send an email" },
+    }));
+    if (decision.action.type === "escalate") {
+      expect(decision.action.cantDo).toBe("send an email");
+    }
+  });
+
   it("defaults escalate category to human_request", () => {
     const raw = JSON.stringify({
       reasoning: "escalating",

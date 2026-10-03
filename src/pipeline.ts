@@ -37,7 +37,7 @@ export async function processMessage(
   switch (lastAction.action.type) {
     case "escalate": {
       const category = lastAction.action.category;
-      reply = handleEscalation(category, lastAction.action.reason);
+      reply = handleEscalation(category, lastAction.action.reason, lastAction.action.cantDo);
       break;
     }
 

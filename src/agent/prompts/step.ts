@@ -111,7 +111,7 @@ Decide the next action. Return ONLY valid JSON (no markdown fences):
 Action types:
 - {"type": "call_tool", "tool": "toolName", "args": {...}} — call an available tool to gather data
 - {"type": "load_skill", "skill": "skillName"} — load domain knowledge for response composition
-- {"type": "escalate", "reason": "short reason", "category": "human_request" or "cant_handle"} — hand to human
+- {"type": "escalate", "reason": "short reason", "category": "human_request" or "cant_handle", "cantDo": "short verb phrase or null"} — hand to human. For cant_handle, cantDo names the requested action generically (e.g. "cancel a booking", "send an email"): no numbers, amounts, names, or other personal data. null for human_request.
 - {"type": "clarify", "question": "what to ask", "missingInfo": "what's missing"} — ask the patient
 - {"type": "respond", "skills": ["skill1", "skill2"]} — all goals resolved, compose response
 
@@ -120,9 +120,9 @@ Action types:
 - If a goal can be resolved from data already gathered or from patient context, mark it resolved — no tool call needed.
 - If a goal needs tool data, call_tool with the specific tool and arguments.
 - The responder can only use data gathered here. When a goal needs a skill, call the AVAILABLE TOOLS that skill relies on whose data the goal needs (links, IDs, statuses) before responding.
-- The responder can never write a URL itself. If the answer will point the patient to a page or resource that an AVAILABLE TOOL returns a link for, call that tool before responding so the exact URL can be included.
+- The responder can never write a URL itself. If the patient asks about a page or resource, or the answer will point them to one, and an AVAILABLE TOOL returns that page's link, call that tool before responding so the exact URL can be included. When the patient names a specific page, fetch the link of the page they named, not a different page that serves a similar purpose, and do not send a second link alongside it.
 - Call only ONE tool per iteration. Assess the result before choosing the next.
-- If ALL goals are resolved, respond with the list of skills the response needs.
+- If ALL goals are resolved, respond with the list of skills the response needs. Choose skills by what the reply must actually do, not by topics the message mentions: a skill whose rules would only add content the patient did not ask for should not be loaded.
 - A tool result may reveal that further tool calls are needed. Add new goals if so.
 - call_tool may only use AVAILABLE TOOLS. writeActions may only use DEFERRED TOOLS; they execute AFTER the response.
 - Current iteration: ${iteration}`);
@@ -177,6 +177,7 @@ function normalizeAction(raw: Record<string, unknown>): AgentAction {
         type: "escalate",
         reason: String(raw.reason ?? ""),
         category: raw.category === "cant_handle" ? "cant_handle" : "human_request",
+        cantDo: typeof raw.cantDo === "string" ? raw.cantDo : null,
       };
     case "clarify":
       return {

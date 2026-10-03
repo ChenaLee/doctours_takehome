@@ -86,6 +86,7 @@ Rules:
 - escalate is false for normal replies. If true, escalationReason must be non-null.
 - If escalate is false, escalationReason must be null.
 - attachmentUrls: only URLs from tool results, at most 3. null if none.
+- When you state a package price, also state that package's deposit amount, both with the currency code from the same tool result (e.g. "3,000 USD"). Do not add other package details the patient did not ask about.
 - actions: deferred tool calls, only from: ${getToolsByKind("deferred").map((t) => t.name).join(", ")}.`);
 
   return sections.join("\n\n");
