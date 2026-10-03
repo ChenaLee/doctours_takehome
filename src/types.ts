@@ -79,7 +79,7 @@ export interface AgentState {
 export type AgentAction =
   | { type: "call_tool"; tool: string; args: Record<string, unknown> }
   | { type: "load_skill"; skill: string }
-  | { type: "escalate"; reason: string }
+  | { type: "escalate"; reason: string; category?: "human_request" | "cant_handle" }
   | { type: "clarify"; question: string; missingInfo: string }
   | { type: "respond"; skills: string[] };
 
