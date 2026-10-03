@@ -64,6 +64,27 @@ export async function processMessage(
   return reply;
 }
 
+/**
+ * Never throws: a failed LLM call or unparseable model output becomes a
+ * handoff-to-human reply, so one bad message can't sink a whole batch.
+ * The error goes to stderr only — its text may include model output.
+ */
+export async function processMessageSafely(
+  messageText: string,
+  llm: LlmCaller,
+  conversationHistory?: string,
+): Promise<Reply> {
+  try {
+    if (typeof messageText !== "string" || messageText.trim() === "") {
+      throw new Error("Message text is missing or empty");
+    }
+    return await processMessage(messageText, llm, conversationHistory);
+  } catch (err) {
+    process.stderr.write(`  ! failed to draft a reply: ${err instanceof Error ? err.message : String(err)}\n`);
+    return handleEscalation("cant_handle", "System error while drafting a reply");
+  }
+}
+
 async function composeResponse(
   state: AgentState,
   skills: string[],

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { processMessage } from "./pipeline.js";
+import { processMessageSafely } from "./pipeline.js";
 import { createClaudeCaller } from "./engine/claude.js";
 import { RECENT_CONVERSATION_SUMMARY } from "./constants.js";
 import type { Message, Reply } from "./types.js";
@@ -10,12 +10,15 @@ async function main() {
     : readFileSync(0, "utf-8");
 
   const messages: Message[] = JSON.parse(input);
+  if (!Array.isArray(messages)) {
+    throw new Error("Input must be a JSON array of { id, text } messages");
+  }
   const llm = createClaudeCaller();
   const replies: Reply[] = [];
 
   for (const msg of messages) {
-    process.stderr.write(`Processing: ${msg.id}\n`);
-    const reply = await processMessage(msg.text, llm, RECENT_CONVERSATION_SUMMARY);
+    process.stderr.write(`Processing: ${msg?.id}\n`);
+    const reply = await processMessageSafely(msg?.text, llm, RECENT_CONVERSATION_SUMMARY);
     replies.push(reply);
     process.stderr.write(`  → escalate=${reply.escalate}, intent="${reply.intent}"\n`);
   }

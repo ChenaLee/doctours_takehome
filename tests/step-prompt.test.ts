@@ -150,14 +150,14 @@ describe("buildStepPrompt", () => {
     }
   });
 
-  it("injects rules for skills required by goals", () => {
+  it("never includes full skill text, even for skills goals require", () => {
     const state = createAgentState("Hi", DUMMY_CONTEXT, DUMMY_HISTORY);
-    expect(buildStepPrompt(state, 1)).not.toContain("# SKILL RULES");
     addGoal(state, { id: "g1", description: "pay", resolved: false, requiredSkill: "payment" });
+    state.loadedSkills.push("pricing");
     const prompt = buildStepPrompt(state, 2);
-    expect(prompt).toContain("# SKILL RULES");
-    expect(prompt).toContain("## skill: payment");
-    expect(prompt).toContain("CHECKOUT link");
+    expect(prompt).not.toContain("SKILL RULES");
+    expect(prompt).not.toContain("# REVERSIBILITY");
+    expect(prompt).not.toContain("# FINANCING GEOGRAPHY");
   });
 
   it("annotates skills with the tools they rely on", () => {

@@ -35,7 +35,13 @@ cat messages.json | node dist/index.js > replies.json
 ```
 
 - **stdout:** a JSON array of `Reply` objects (see `src/types.ts`), one per input message, in input order. A `Reply` has no `id` field; match replies to inputs by position.
-- **stderr:** progress lines (`Processing: <id>` and `→ escalate=…, intent=…`).
+- **stderr:** progress lines (`Processing: <id>` and `→ escalate=…, intent=…`), plus `! failed to draft a reply: …` when a message fails.
+- **Errors are caught per message.** If a `claude` call fails, model output won't parse, or a message has no text, that message gets a handoff reply and the batch continues:
+  - `escalate: true`
+  - `escalationReason: "System error while drafting a reply"`
+  - `response: "I can't help with that directly. I'm getting a person for you."`
+
+  The process exits 1 only when the input itself isn't a JSON array.
 
 Messages are processed one after another. Each needs between 1 and 8 `claude` calls, so expect roughly 10–60 seconds per message.
 
@@ -122,8 +128,7 @@ That rule stopped the reply from resending a link the patient was asking about. 
 - Current goals, and the data gathered so far (tool results).
 - A log of the actions taken.
 - **Tools.** Every registered tool's name and description, split into immediate and deferred.
-- **Skills.** Every skill's name and description, plus the registered tools the skill's text references (`getSkillTools`, derived by matching tool names in the skill text).
-- **Skill rules.** The full text of every skill a goal names or that was loaded with `load_skill`.
+- **Skills.** Every skill's name and description, plus the registered tools the skill's text references (`getSkillTools`, derived by matching tool names in the skill text). The planner never sees a skill's full text. It routes by these descriptions; only the responder reads the rules themselves. This keeps planner calls small and puts policy wording in one place.
 - The capability boundary and the output schema.
 
 The planner's user message is the raw patient text.
@@ -136,7 +141,7 @@ The planner's user message is the raw patient text.
 
 The responder's user message is `USER_MESSAGE_TEMPLATE`: the incoming message plus the recent conversation summary.
 
-The responder only receives skills named in `respond.skills`. A skill loaded with `load_skill` informs the planner but does not reach the responder unless `respond` names it too.
+The responder only receives skills named in `respond.skills`. `load_skill` only records a skill in the agent state, which the iteration-cap fallback uses. It does not reach the responder unless `respond` names it too.
 
 ### Registries drive everything
 
@@ -174,7 +179,7 @@ The planner is told "when in doubt, escalate". Because the boundary comes from t
 
 ```
 src/index.ts               CLI: JSON in, JSON out
-src/pipeline.ts            per-message orchestration, write actions, clarify reply
+src/pipeline.ts            per-message orchestration, per-message error fallback, write actions, clarify reply
 src/agent/loop.ts          planner loop, tool-kind enforcement
 src/agent/prompts/step.ts  planner prompt + response parser
 src/agent/prompts/responder.ts  responder prompt (base + skills + tool results + format)
@@ -190,7 +195,6 @@ scripts/split-system-prompt.mjs     regenerates src/skills/*.ts
 
 ## Known limitations
 
-- **One failure stops the whole run.** If a `claude` call fails, or the planner or responder returns JSON that won't parse, the error propagates. The process then exits 1 without writing any replies.
 - **`escalationReason` is not sanitized.** It is the planner's free text. The planner is instructed never to echo sensitive data, but only the `response` text is enforced in code.
 - **Fixed patient and history.** Patient, history and tool data are fixed, so behavior on a different patient or pipeline stage needs those constants changed.
 - **Replies vary between runs.** The model isn't deterministic, e.g. whether a simple factual answer includes an optional link.
