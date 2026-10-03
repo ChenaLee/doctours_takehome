@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { processMessage, executeWriteActions } from "../src/pipeline.js";
+import { processMessage, processMessageSafely, executeWriteActions } from "../src/pipeline.js";
 import type { LlmCaller } from "../src/engine/claude.js";
 
 function mockLlm(responses: string[]): LlmCaller {
@@ -208,5 +208,27 @@ describe("executeWriteActions", () => {
 
   it("handles empty actions array", () => {
     expect(() => executeWriteActions([])).not.toThrow();
+  });
+});
+
+describe("processMessageSafely", () => {
+  it("returns a handoff reply when the LLM call fails", async () => {
+    const llm = async () => { throw new Error("claude exited 1"); };
+    const reply = await processMessageSafely("What does Heva cost?", llm);
+    expect(reply.escalate).toBe(true);
+    expect(reply.escalationReason).toBe("System error while drafting a reply");
+    expect(reply.response).toBe("I can't help with that directly. I'm getting a person for you.");
+  });
+
+  it("returns a handoff reply when the model output is not JSON", async () => {
+    const llm = async () => "not json at all";
+    const reply = await processMessageSafely("Hi", llm);
+    expect(reply.escalate).toBe(true);
+  });
+
+  it("returns a handoff reply for missing message text", async () => {
+    const llm = async () => { throw new Error("should not be called"); };
+    const reply = await processMessageSafely(undefined as unknown as string, llm);
+    expect(reply.escalate).toBe(true);
   });
 });

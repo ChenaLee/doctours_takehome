@@ -1,6 +1,6 @@
 import type { AgentState, AgentAction } from "../../types.js";
 import { getToolsByKind } from "../../tools/registry.js";
-import { getSkillDescriptions, getSkillPrompt } from "../../skills/registry.js";
+import { getSkillDescriptions } from "../../skills/registry.js";
 
 export interface StepDecision {
   reasoning: string;
@@ -38,23 +38,6 @@ ${state.conversationHistory || "(none)"}`);
     sections.push(`# END GOALS\n${goalLines.join("\n")}`);
   } else {
     sections.push(`# END GOALS\nNone yet — this is iteration 1. Decompose the patient message into end goals.`);
-  }
-
-  const activeSkills = [
-    ...new Set([
-      ...state.endGoals.map((g) => g.requiredSkill).filter((s): s is string => s !== null),
-      ...state.loadedSkills,
-    ]),
-  ];
-  const skillRules = activeSkills
-    .map((name) => ({ name, prompt: getSkillPrompt(name) }))
-    .filter((s): s is { name: string; prompt: string } => s.prompt !== null);
-  if (skillRules.length > 0) {
-    sections.push(
-      `# SKILL RULES (from skills your goals require — follow these when choosing tools and arguments)\n${skillRules
-        .map((s) => `## skill: ${s.name}\n${s.prompt}`)
-        .join("\n\n")}`,
-    );
   }
 
   if (Object.keys(state.toolResults).length > 0) {
